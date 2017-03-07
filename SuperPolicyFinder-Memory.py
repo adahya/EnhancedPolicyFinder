@@ -3,24 +3,30 @@ import argparse
 import re
 import pprint
 import ipaddress
+import json
 
 
 addrgrpobjdict = dict()
 addrobjdict = dict()
 fwpolicydict = dict()
 
+def pp_json(json_str):
+    print(json.dumps(json_str, sort_keys=True,indent=4,separators=(',', ': ')))
+
 def expandips(Addr):
     OrigAddr = str(Addr)
     SplitedIPs = list()
     SplitedIPs += list(OrigAddr.split(' '))
-
-    print ('Before : %s' % SplitedIPs)
-    for e_entry in  SplitedIPs:
+    for i,e_entry in enumerate(SplitedIPs):
         if e_entry in addrgrpobjdict:
-            SplitedIPs += (list(','.join(str(addrgrpobjdict[e_entry]['member']))))
-    print('After : %s' % SplitedIPs)
-    return (Addr)
-
+            SplitedIPs += addrgrpobjdict[e_entry]['member']
+        else:
+            SplitedIPs[i] = e_entry.replace('"','')
+    Final_Splitted_IPs = list()
+    for i, e_entry in enumerate(SplitedIPs):
+        if e_entry not in addrgrpobjdict:
+            Final_Splitted_IPs.append(e_entry)
+    return Final_Splitted_IPs
 
 def print_dict(dictionary):
     for keys, values in dictionary.items():
@@ -49,9 +55,10 @@ if __name__ == '__main__':
     print(("Parsing Configuration File: %s" % CONFIGFILE))
 
     matchingipaddress = vars(args)['m']
-    print(("Parsing for Match for IP Address : %s" % matchingipaddress))
+    TIP = ipaddress.IPv4Network(matchingipaddress)
+    print(("Parsing for Match for IP Address : %s" % str(TIP)))
 
-    filename = "FWRY02-VDOM-FWRY13"
+    filename = "fwry02-fwry13.conf"
     while filename == "":
         print("Please enter name of output file (without .xlsx): ")
         filename = input()
@@ -73,11 +80,11 @@ if __name__ == '__main__':
     for line in alladdress:
         try:
             if line.strip().startswith('edit'):
-                addrobjid = re.match(r'edit (".*")', line.strip()).groups()[0]
+                addrobjid = (re.match(r'edit (".*")', line.strip()).groups()[0]).replace('"','')
                 addrobjdict[addrobjid] = dict()
             elif line.strip() != 'next' and line.strip().startswith('set'):
                 key, val = re.match(r'^set (\S*) (.+)$', line.strip()).groups()
-                addrobjdict[addrobjid][key] = val
+                addrobjdict[addrobjid][key] = val.replace('"','')
         except:
             print(("Error on line: %s" % line))
             raise
@@ -88,11 +95,13 @@ if __name__ == '__main__':
     for line in alladdressgroups:
         try:
             if line.strip().startswith('edit'):
-                addrgrpobjid = re.match(r'edit (".*")', line.strip()).groups()[0]
+                addrgrpobjid = (re.match(r'edit (".*")', line.strip()).groups()[0]).replace('"','')
                 addrgrpobjdict[addrgrpobjid] = dict()
             elif line.strip() != 'next' and line.strip().startswith('set'):
                 key, val = re.match(r'^set (\S*) (.+)$', line.strip()).groups()
-                addrgrpobjdict[addrgrpobjid][key] = val
+                addrgrpobjdict[addrgrpobjid][key] = val.split(''" "'')
+                for i, item in enumerate(addrgrpobjdict[addrgrpobjid][key]):
+                    addrgrpobjdict[addrgrpobjid][key][i] = (addrgrpobjdict[addrgrpobjid][key][i]).replace('"','')
         except:
             print(("Error on line: %s" % line))
             raise
@@ -105,11 +114,11 @@ if __name__ == '__main__':
     for line in allserviceports:
         try:
             if line.strip().startswith('edit'):
-                serviceportid = re.match(r'edit (".*")', line.strip()).groups()[0]
+                serviceportid = (re.match(r'edit (".*")', line.strip()).groups()[0]).replace('"','')
                 serviceportsdict[serviceportid] = dict()
             elif line.strip() != 'next' and line.strip().startswith('set'):
                 key, val = re.match(r'^set (\S*) (.+)$', line.strip()).groups()
-                serviceportsdict[serviceportid][key] = val
+                serviceportsdict[serviceportid][key] = val.replace('"','')
         except:
             print(("Error on line: %s" % line))
             raise
@@ -124,7 +133,7 @@ if __name__ == '__main__':
                 fwpolicydict[fwpolicyid] = dict()
             elif line.strip() != 'next' and line.strip().startswith('set'):
                 key, val = re.match(r'^set (\S*) (.+)$', line.strip()).groups()
-                fwpolicydict[fwpolicyid][key] = val
+                fwpolicydict[fwpolicyid][key] = val.replace('"','')
         except:
             print(("Error on line: %s" % line))
             raise
@@ -141,16 +150,36 @@ if __name__ == '__main__':
     f = open('test','w')
 
     for PID in fwpolicydict:
-        SrcIPs = expandips(fwpolicydict[PID]['srcaddr'])
-        DstIPs = expandips(fwpolicydict[PID]['dstaddr'])
-
-
-
+        fwpolicydict[PID]['srcaddr'] = expandips(fwpolicydict[PID]['srcaddr'])
+        fwpolicydict[PID]['dstaddr'] = expandips(fwpolicydict[PID]['dstaddr'])
 
     print(("Total Address Objects      : %d" % len(list(addrobjdict.keys()))))
     print(("Total Address Group Objects: %d" % len(list(addrgrpobjdict.keys()))))
     print(("Total Custom Services      : %d" % len(list(serviceportsdict.keys()))))
     print(("Total Firewall Policies    : %d" % len(list(fwpolicydict.keys()))))
 
+    fd = open('test-output.txt', 'w')
+    fd.write(json.dumps({
+        "addrobjdict": addrobjdict,
+        "addrgrpobjdict": addrgrpobjdict,
+        "serviceportsdict": serviceportsdict,
+        "fwpolicydict": fwpolicydict,
+    }, sort_keys=True,indent=4,separators=(',', ': ')))
+    fd.close()
+
+    for i,key in enumerate(fwpolicydict):
+        pol = fwpolicydict[key]
+        pp_json(pol)
+        for obj in pol["srcaddr"]:
+            try:
+                if 'type' in (addrobjdict[obj]).keys():
+                    #print(addrobjdict[obj])
+                    continue
+                elif 'subnet' in (addrobjdict[obj]).keys():
+                    print(addrobjdict[obj])
+            except:
+                pp_json(pol)
+                pp_json(pol)
+                raise
 
 
