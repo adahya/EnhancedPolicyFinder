@@ -4,6 +4,7 @@ import re
 import pprint
 import ipaddress
 import json
+import openpyxl
 
 
 addrgrpobjdict = dict()
@@ -12,6 +13,27 @@ fwpolicydict = dict()
 
 def pp_json(json_str):
     print(json.dumps(json_str, sort_keys=True,indent=4,separators=(',', ': ')))
+
+def in_supersubnet(IP,IPSubnet):
+    i = IP.prefixlen
+    if i < IPSubnet.prefixlen and IP.overlaps(IPSubnet):
+        return True
+    for i in range(0):
+        if IP.supernet(new_prefix=i) == IPSubnet:
+          return True
+    return False
+
+def in_Range(IP,IPRange):
+    Decision = False
+    Match = IPRange[0]
+    while Match != IPRange[1]:
+        if IP == Match:
+            print(str(IP) + ' Matches the Range ' + IPRange[0] + ' - ' + IPRange[1] )
+            Decision = True
+            break
+        Match += 1
+    return Decision
+
 
 def expandips(Addr):
     OrigAddr = str(Addr)
@@ -27,11 +49,6 @@ def expandips(Addr):
         if e_entry not in addrgrpobjdict:
             Final_Splitted_IPs.append(e_entry)
     return Final_Splitted_IPs
-
-def print_dict(dictionary):
-    for keys, values in dictionary.items():
-        print(keys)
-        print(values)
 
 if __name__ == '__main__':
 
@@ -50,18 +67,18 @@ if __name__ == '__main__':
                         required=True)
 
     args = parser.parse_args()
-    CONFIGFILE = vars(args)['f']
+    filename = vars(args)['f']
 
-    print(("Parsing Configuration File: %s" % CONFIGFILE))
+    print(("Parsing Configuration File: %s" % filename))
 
     matchingipaddress = vars(args)['m']
     TIP = ipaddress.IPv4Network(matchingipaddress)
     print(("Parsing for Match for IP Address : %s" % str(TIP)))
 
-    filename = "fwry02-fwry13.conf"
-    while filename == "":
-        print("Please enter name of output file (without .xlsx): ")
-        filename = input()
+    if filename is None:
+        while filename == None:
+            print("Please enter name of output file (without .xlsx): ")
+            filename = input()
 
     addobj_dict = dict()
 
@@ -69,8 +86,9 @@ if __name__ == '__main__':
     print("PHASE 1: Loading Configuration File %s" % filename)
     try:
         fullconfigstr = open(filename, 'r').read()
-    except:
+    except FileNotFoundError:
         print(("Error reading config file: %s" % filename))
+        sys.exit(FileNotFoundError.errno)
 
     fullconfiglines = fullconfigstr.splitlines()
 
@@ -138,15 +156,6 @@ if __name__ == '__main__':
             print(("Error on line: %s" % line))
             raise
 
-    print("PHASE 2: Parsing Configuration File ")
-
-    match = list()
-    try:
-        matchingipnetaddress = ipaddress.IPv4Network (matchingipaddress)
-    except:
-        print ('Error wrong Format for IP Address')
-        raise
-
     f = open('test','w')
 
     for PID in fwpolicydict:
@@ -167,19 +176,119 @@ if __name__ == '__main__':
     }, sort_keys=True,indent=4,separators=(',', ': ')))
     fd.close()
 
+    try:
+        matchingipnetaddress = ipaddress.IPv4Network(matchingipaddress)
+    except:
+        print ('Error wrong Format for IP Address')
+        raise
+    sys.stdout.write ('\nPHASE 2: Parsing Configuration File \n')
+
+    Targetpolicydict = dict()
+    matched = 0
     for i,key in enumerate(fwpolicydict):
+        sys.stdout.write ('\rProcessing POLICY ID %s --- %d/%d POLICIES MATCHED/TESTED' % (key.rjust(5), matched, len(list(fwpolicydict.keys()))))
         pol = fwpolicydict[key]
-        pp_json(pol)
+        #pp_json(pol)
         for obj in pol["srcaddr"]:
+            if addrobjdict[obj] == None:
+                print('Error No Match in Address Object ')
             try:
-                if 'type' in (addrobjdict[obj]).keys():
-                    #print(addrobjdict[obj])
-                    continue
-                elif 'subnet' in (addrobjdict[obj]).keys():
-                    print(addrobjdict[obj])
+                if 'iprange' == addrobjdict[obj].get('type'):
+                    #pp_json(addrobjdict[obj])
+                    IPRange = list()
+                    IPRange.append(ipaddress.IPv4Address (str(addrobjdict[obj].get('start-ip'))))
+                    IPRange.append(ipaddress.IPv4Address (str (addrobjdict[obj].get ('end-ip'))))
+                    if in_Range(matchingipnetaddress,IPRange) :
+                        Targetpolicydict[key] = pol
+                        matched += 1
+                        break
+                elif 'ipmask' == addrobjdict[obj].get('type'):
+                    #pp_json(addrobjdict[obj])
+                    IPSubnet = str(addrobjdict[obj].get('subnet')).replace(' ','/')
+                    policyaddr = ipaddress.IPv4Network(IPSubnet)
+                    if in_supersubnet (matchingipnetaddress, policyaddr):
+                        Targetpolicydict[key] = pol
+                        matched += 1
+                        break
+                    elif matchingipnetaddress == policyaddr:
+                        #sys.stdout.write('Exact Match %s in Policy $s' % str(matchingipnetaddress) , key)
+                        Targetpolicydict[key] = pol
+                        matched += 1
+                        break
+
             except:
                 pp_json(pol)
                 pp_json(pol)
                 raise
+    sys.stdout.write ('\rProcessed                   %d/%d POLICIES MATCHED/TESTED' % (matched, len (list (fwpolicydict.keys ()))))
+    sys.stdout.write ('\nPHASE 3: Saving Matched policies into %s.xlsx File ' % (filename) )
+    f = open("MatchingPolicies",'w')
+    f.write(json.dumps(Targetpolicydict, sort_keys=True,indent=4,separators=(',', ': ')))
+    f.close()
+
+    outxlsx = openpyxl.Workbook()
+    outsheet = outxlsx.active
+    outsheet.title = 'Matched Policies'
+
+    # Write the header
+    outsheet['A1'] = 'Policy ID#'
+    outsheet['B1'] = 'Action'
+    outsheet['C1'] = 'Source Interface'
+    outsheet['D1'] = 'Destination Interface'
+    outsheet['E1'] = 'Source Addresses'
+    outsheet['F1'] = 'Destination Addresses'
+    outsheet['G1'] = 'Service'
+    outsheet['H1'] = 'Status'
+
+    row = 2
+    # Write Matched Policies in ExcelSheet
+    for i, key in enumerate (Targetpolicydict):
+        outsheet.cell (row=row, column=1).value = key
+        outsheet.cell (row=row, column=2).value = str(Targetpolicydict[key].get('action'))
+        outsheet.cell (row=row, column=3).value = str(Targetpolicydict[key].get('srcintf'))
+        outsheet.cell (row=row, column=4).value = str(Targetpolicydict[key].get('dstintf'))
+        outsheet.cell (row=row, column=5).value = str(Targetpolicydict[key].get('srcaddr'))
+        outsheet.cell (row=row, column=6).value = str(Targetpolicydict[key].get('dstaddr'))
+        outsheet.cell (row=row, column=7).value = str(Targetpolicydict[key].get('service'))
+        outsheet.cell (row=row, column=8).value = str(Targetpolicydict[key].get('status'))
+        row += 1
+        sys.stdout.write ('\rWriting POLICIES to File --- %d/%d POLICIES MATCHED/TESTED' % ((i+1), len(list(fwpolicydict.keys()))))
+    sys.stdout.write ('\n\rSaving File POLICIES to File ')
+
+    #Check the non matching Policies for checking
+    outxlsx.save (filename + '.xlsx')
+    outsheet = outxlsx.create_sheet("None Match Sheet")
 
 
+    # Write the header
+    outsheet['A1'] = 'Policy ID#'
+    outsheet['B1'] = 'Action'
+    outsheet['C1'] = 'Source Interface'
+    outsheet['D1'] = 'Destination Interface'
+    outsheet['E1'] = 'Source Addresses'
+    outsheet['F1'] = 'Destination Addresses'
+    outsheet['G1'] = 'Service'
+    outsheet['H1'] = 'Status'
+
+    #Remove the Match Policies from the Dict
+    temp = dict()
+    for i,key in enumerate(fwpolicydict):
+        if key in Targetpolicydict:
+            continue
+        else:
+            temp[key] = fwpolicydict[key]
+
+    #Write the Non Match Policies to Excel
+    row = 2
+    # Write Matched Policies in ExcelSheet
+    for i, key in enumerate (temp):
+        outsheet.cell (row=row, column=1).value = key
+        outsheet.cell (row=row, column=2).value = str(temp[key].get('action'))
+        outsheet.cell (row=row, column=3).value = str(temp[key].get('srcintf'))
+        outsheet.cell (row=row, column=4).value = str(temp[key].get('dstintf'))
+        outsheet.cell (row=row, column=5).value = str(temp[key].get('srcaddr'))
+        outsheet.cell (row=row, column=6).value = str(temp[key].get('dstaddr'))
+        outsheet.cell (row=row, column=7).value = str(temp[key].get('service'))
+        outsheet.cell (row=row, column=8).value = str(temp[key].get('status'))
+    outxlsx.save (filename + '.xlsx')
+    print('\n----OPERATION COMPLETED----\n')
