@@ -35,9 +35,9 @@ def FindMatchingPolicies(option=None):
                         matched += 1
                         break
                 elif 'fqdn' == addrobjdict[obj].get('type'):
-                    continue
+                    break
                 elif 'wildcard' == addrobjdict[obj].get('type'):
-                    continue
+                    break
                 elif addrobjdict[obj] != {}:
                     # pp_json(addrobjdict[obj])
                     IPSubnet = str(addrobjdict[obj].get('subnet')).replace(' ', '/')
@@ -67,15 +67,13 @@ def in_supersubnet(IP, IPSubnet):
     return False
 
 def in_Range(IP,IPRange):
-    Decision = False
-    Match = IPRange[0]
-    while Match != IPRange[1]:
-        if IP == Match:
-            print(str(IP) + ' Matches the Range ' + IPRange[0] + ' - ' + IPRange[1] )
-            Decision = True
-            break
-        Match += 1
-    return Decision
+    start_ip = ipaddress.ip_address(IPRange[0])
+    end_ip = ipaddress.ip_address(IPRange[1])
+    subnet_list = ipaddress.summarize_address_range(start_ip, end_ip)
+    decision = False
+    for subnet in subnet_list:
+        decision = decision or subnet.overlaps(IP)
+    return decision
 
 
 def expandips(Addr):
