@@ -77,7 +77,7 @@ if __name__ == '__main__':
 
     if filename is None:
         while filename == None:
-            print("Please enter name of output file (without .xlsx): ")
+            print("Please enter name of source config file: ")
             filename = input()
 
     addobj_dict = dict()
@@ -156,8 +156,6 @@ if __name__ == '__main__':
             print(("Error on line: %s" % line))
             raise
 
-    f = open('test','w')
-
     for PID in fwpolicydict:
         fwpolicydict[PID]['srcaddr'] = expandips(fwpolicydict[PID]['srcaddr'])
         fwpolicydict[PID]['dstaddr'] = expandips(fwpolicydict[PID]['dstaddr'])
@@ -167,7 +165,7 @@ if __name__ == '__main__':
     print(("Total Custom Services      : %d" % len(list(serviceportsdict.keys()))))
     print(("Total Firewall Policies    : %d" % len(list(fwpolicydict.keys()))))
 
-    fd = open('test-output.txt', 'w')
+    fd = open('test-output.json', 'w')
     fd.write(json.dumps({
         "addrobjdict": addrobjdict,
         "addrgrpobjdict": addrgrpobjdict,
@@ -218,11 +216,10 @@ if __name__ == '__main__':
 
             except:
                 pp_json(pol)
-                pp_json(pol)
                 raise
     sys.stdout.write ('\rProcessed                   %d/%d POLICIES MATCHED/TESTED' % (matched, len (list (fwpolicydict.keys ()))))
     sys.stdout.write ('\nPHASE 3: Saving Matched policies into %s.xlsx File ' % (filename) )
-    f = open("MatchingPolicies",'w')
+    f = open("MatchingPolicies.json",'w')
     f.write(json.dumps(Targetpolicydict, sort_keys=True,indent=4,separators=(',', ': ')))
     f.close()
 
