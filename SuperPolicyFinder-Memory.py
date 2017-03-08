@@ -11,16 +11,59 @@ addrgrpobjdict = dict()
 addrobjdict = dict()
 fwpolicydict = dict()
 
+
+
+# Policy matching logic
+def FindMatchingPolicies(option=None):
+    Targetpolicydict = dict()
+    matched = 0
+    for i,key in enumerate(fwpolicydict):
+        sys.stdout.write ('\rProcessing POLICY ID %s --- %d/%d POLICIES MATCHED/TESTED' % (key.rjust(5), matched, len(list(fwpolicydict.keys()))))
+        pol = fwpolicydict[key]
+        # pp_json(pol)
+        for obj in pol[option]:
+            if addrobjdict[obj] == None:
+                print('Error No Match in Address Object ')
+            try:
+                if 'iprange' == addrobjdict[obj].get('type'):
+                    # pp_json(addrobjdict[obj])
+                    IPRange = list()
+                    IPRange.append(ipaddress.IPv4Address(str(addrobjdict[obj].get('start-ip'))))
+                    IPRange.append(ipaddress.IPv4Address(str(addrobjdict[obj].get('end-ip'))))
+                    if in_Range(matchingipnetaddress, IPRange):
+                        Targetpolicydict[key] = pol
+                        matched += 1
+                        break
+                elif 'fqdn' == addrobjdict[obj].get('type'):
+                    continue
+                elif 'wildcard' == addrobjdict[obj].get('type'):
+                    continue
+                elif addrobjdict[obj] != {}:
+                    # pp_json(addrobjdict[obj])
+                    IPSubnet = str(addrobjdict[obj].get('subnet')).replace(' ', '/')
+                    policyaddr = ipaddress.IPv4Network(IPSubnet)
+                    if in_supersubnet(matchingipnetaddress, policyaddr):
+                        Targetpolicydict[key] = pol
+                        matched += 1
+                        break
+                    elif matchingipnetaddress == policyaddr:
+                        # sys.stdout.write('Exact Match %s in Policy $s' % str(matchingipnetaddress) , key)
+                        Targetpolicydict[key] = pol
+                        matched += 1
+                        break
+            except:
+                raise
+    return Targetpolicydict
+
+
 def pp_json(json_str):
     print(json.dumps(json_str, sort_keys=True,indent=4,separators=(',', ': ')))
 
-def in_supersubnet(IP,IPSubnet):
+def in_supersubnet(IP, IPSubnet):
     i = IP.prefixlen
-    if i < IPSubnet.prefixlen and IP.overlaps(IPSubnet):
+    if IP.overlaps(IPSubnet):
         return True
-    for i in range(0):
-        if IP.supernet(new_prefix=i) == IPSubnet:
-          return True
+
     return False
 
 def in_Range(IP,IPRange):
@@ -179,45 +222,10 @@ if __name__ == '__main__':
     except:
         print ('Error wrong Format for IP Address')
         raise
+
     sys.stdout.write ('\nPHASE 2: Parsing Configuration File \n')
-
-    Targetpolicydict = dict()
-    matched = 0
-    for i,key in enumerate(fwpolicydict):
-        sys.stdout.write ('\rProcessing POLICY ID %s --- %d/%d POLICIES MATCHED/TESTED' % (key.rjust(5), matched, len(list(fwpolicydict.keys()))))
-        pol = fwpolicydict[key]
-        #pp_json(pol)
-        for obj in pol["srcaddr"]:
-            if addrobjdict[obj] == None:
-                print('Error No Match in Address Object ')
-            try:
-                if 'iprange' == addrobjdict[obj].get('type'):
-                    #pp_json(addrobjdict[obj])
-                    IPRange = list()
-                    IPRange.append(ipaddress.IPv4Address (str(addrobjdict[obj].get('start-ip'))))
-                    IPRange.append(ipaddress.IPv4Address (str (addrobjdict[obj].get ('end-ip'))))
-                    if in_Range(matchingipnetaddress,IPRange) :
-                        Targetpolicydict[key] = pol
-                        matched += 1
-                        break
-                elif 'ipmask' == addrobjdict[obj].get('type'):
-                    #pp_json(addrobjdict[obj])
-                    IPSubnet = str(addrobjdict[obj].get('subnet')).replace(' ','/')
-                    policyaddr = ipaddress.IPv4Network(IPSubnet)
-                    if in_supersubnet (matchingipnetaddress, policyaddr):
-                        Targetpolicydict[key] = pol
-                        matched += 1
-                        break
-                    elif matchingipnetaddress == policyaddr:
-                        #sys.stdout.write('Exact Match %s in Policy $s' % str(matchingipnetaddress) , key)
-                        Targetpolicydict[key] = pol
-                        matched += 1
-                        break
-
-            except:
-                pp_json(pol)
-                raise
-    sys.stdout.write ('\rProcessed                   %d/%d POLICIES MATCHED/TESTED' % (matched, len (list (fwpolicydict.keys ()))))
+    Targetpolicydict = FindMatchingPolicies(option='dstaddr')
+    sys.stdout.write ('\rProcessed                   %d/%d POLICIES MATCHED/TESTED' % (len(Targetpolicydict), len (list (fwpolicydict.keys ()))))
     sys.stdout.write ('\nPHASE 3: Saving Matched policies into %s.xlsx File ' % (filename) )
     f = open("MatchingPolicies.json",'w')
     f.write(json.dumps(Targetpolicydict, sort_keys=True,indent=4,separators=(',', ': ')))
@@ -236,6 +244,8 @@ if __name__ == '__main__':
     outsheet['F1'] = 'Destination Addresses'
     outsheet['G1'] = 'Service'
     outsheet['H1'] = 'Status'
+
+
 
     row = 2
     # Write Matched Policies in ExcelSheet
