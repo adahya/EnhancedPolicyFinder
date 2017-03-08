@@ -89,6 +89,12 @@ def expandips(Addr):
             Final_Splitted_IPs.append(e_entry)
     return Final_Splitted_IPs
 
+def expandservices(ServiceStr):
+    OrigAddr = str(ServiceStr)
+    SplitedServices = list()
+    SplitedServices += list(OrigAddr.split(' '))
+    return SplitedServices
+
 if __name__ == '__main__':
 
     pp = pprint.PrettyPrinter(indent=2)
@@ -105,12 +111,14 @@ if __name__ == '__main__':
                         help='matching ip address in format X.X.X.X/XX',
                         required=True)
 
+
     args = parser.parse_args()
     filename = vars(args)['f']
 
     print(("Parsing Configuration File: %s" % filename))
 
     matchingipaddress = vars(args)['m']
+
     TIP = ipaddress.IPv4Network(matchingipaddress)
     print(("Parsing for Match for IP Address : %s" % str(TIP)))
 
@@ -171,7 +179,7 @@ if __name__ == '__main__':
     for line in allserviceports:
         try:
             if line.strip().startswith('edit'):
-                serviceportid = (re.match(r'edit (".*")', line.strip()).groups()[0]).replace('"','')
+                serviceportid = (re.match(r'edit \"(.*)\"', line.strip()).groups()[0])
                 serviceportsdict[serviceportid] = dict()
             elif line.strip() != 'next' and line.strip().startswith('set'):
                 key, val = re.match(r'^set (\S*) (.+)$', line.strip()).groups()
@@ -198,6 +206,7 @@ if __name__ == '__main__':
     for PID in fwpolicydict:
         fwpolicydict[PID]['srcaddr'] = expandips(fwpolicydict[PID]['srcaddr'])
         fwpolicydict[PID]['dstaddr'] = expandips(fwpolicydict[PID]['dstaddr'])
+        fwpolicydict[PID]['service'] = expandservices(fwpolicydict[PID]['service'])
 
     print(("Total Address Objects      : %d" % len(list(addrobjdict.keys()))))
     print(("Total Address Group Objects: %d" % len(list(addrgrpobjdict.keys()))))
@@ -251,11 +260,12 @@ if __name__ == '__main__':
         outsheet.cell (row=row, column=3).value = str(Targetpolicydict[key].get('srcintf'))
         outsheet.cell (row=row, column=4).value = str(Targetpolicydict[key].get('dstintf'))
         # Split the address into 1 per line.
-        src_add_cell_test = '\n'.join(Targetpolicydict[key].get('srcaddr'))
-        outsheet.cell (row=row, column=5).value = src_add_cell_test
-        dst_add_cell_test = '\n'.join(Targetpolicydict[key].get('dstaddr'))
-        outsheet.cell (row=row, column=6).value = dst_add_cell_test
-        outsheet.cell (row=row, column=7).value = str(Targetpolicydict[key].get('service'))
+        src_add_cell_text = '\n'.join(Targetpolicydict[key].get('srcaddr'))
+        outsheet.cell (row=row, column=5).value = src_add_cell_text
+        dst_add_cell_text = '\n'.join(Targetpolicydict[key].get('dstaddr'))
+        outsheet.cell (row=row, column=6).value = dst_add_cell_text
+        service_cell_test = '\n'.join(Targetpolicydict[key].get('service'))
+        outsheet.cell (row=row, column=7).value = service_cell_test
         outsheet.cell (row=row, column=8).value = str(Targetpolicydict[key].get('status'))
         row += 1
         sys.stdout.write ('\rWriting POLICIES to File --- %d/%d POLICIES MATCHED/TESTED' % ((i+1), len(list(fwpolicydict.keys()))))
