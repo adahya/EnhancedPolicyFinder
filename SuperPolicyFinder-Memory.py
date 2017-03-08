@@ -11,8 +11,6 @@ addrgrpobjdict = dict()
 addrobjdict = dict()
 fwpolicydict = dict()
 
-
-
 # Policy matching logic
 def FindMatchingPolicies(option=None):
     Targetpolicydict = dict()
@@ -252,8 +250,11 @@ if __name__ == '__main__':
         outsheet.cell (row=row, column=2).value = str(Targetpolicydict[key].get('action'))
         outsheet.cell (row=row, column=3).value = str(Targetpolicydict[key].get('srcintf'))
         outsheet.cell (row=row, column=4).value = str(Targetpolicydict[key].get('dstintf'))
-        outsheet.cell (row=row, column=5).value = str(Targetpolicydict[key].get('srcaddr'))
-        outsheet.cell (row=row, column=6).value = str(Targetpolicydict[key].get('dstaddr'))
+        # Split the address into 1 per line.
+        src_add_cell_test = '\n'.join(Targetpolicydict[key].get('srcaddr'))
+        outsheet.cell (row=row, column=5).value = src_add_cell_test
+        dst_add_cell_test = '\n'.join(Targetpolicydict[key].get('dstaddr'))
+        outsheet.cell (row=row, column=6).value = dst_add_cell_test
         outsheet.cell (row=row, column=7).value = str(Targetpolicydict[key].get('service'))
         outsheet.cell (row=row, column=8).value = str(Targetpolicydict[key].get('status'))
         row += 1
@@ -262,8 +263,7 @@ if __name__ == '__main__':
 
     #Check the non matching Policies for checking
     outxlsx.save (filename + '.xlsx')
-    outsheet = outxlsx.create_sheet("None Match Sheet")
-
+    outsheet = outxlsx.create_sheet("Non-matching Policy Sheet")
 
     # Write the header
     outsheet['A1'] = 'Policy ID#'
@@ -277,10 +277,8 @@ if __name__ == '__main__':
 
     #Remove the Match Policies from the Dict
     temp = dict()
-    for i,key in enumerate(fwpolicydict):
-        if key in Targetpolicydict:
-            continue
-        else:
+    for i,key in enumerate(fwpolicydict.keys()):
+        if key not in Targetpolicydict.keys():
             temp[key] = fwpolicydict[key]
 
     #Write the Non Match Policies to Excel
@@ -295,5 +293,6 @@ if __name__ == '__main__':
         outsheet.cell (row=row, column=6).value = str(temp[key].get('dstaddr'))
         outsheet.cell (row=row, column=7).value = str(temp[key].get('service'))
         outsheet.cell (row=row, column=8).value = str(temp[key].get('status'))
+        row += 1
     outxlsx.save (filename + '.xlsx')
     print('\n----OPERATION COMPLETED----\n')
