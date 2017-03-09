@@ -20,37 +20,38 @@ def FindMatchingPolicies(option=None):
         pol = fwpolicydict[key]
         # pp_json(pol)
         for obj in pol[option]:
-            if addrobjdict[obj] == None:
-                print('Error No Match in Address Object ')
-            try:
-                if 'iprange' == addrobjdict[obj].get('type'):
-                    # pp_json(addrobjdict[obj])
-                    IPRange = list()
-                    IPRange.append(ipaddress.IPv4Address(str(addrobjdict[obj].get('start-ip'))))
-                    IPRange.append(ipaddress.IPv4Address(str(addrobjdict[obj].get('end-ip'))))
-                    if in_Range(matchingipnetaddress, IPRange):
-                        Targetpolicydict[key] = pol
-                        matched += 1
+            if (obj not in addrobjdict.keys()) or (addrobjdict[obj] == None):
+                print('Error No Match in Address Object: %s' % obj)
+            else:
+                try:
+                    if 'iprange' == addrobjdict[obj].get('type'):
+                        # pp_json(addrobjdict[obj])
+                        IPRange = list()
+                        IPRange.append(ipaddress.IPv4Address(str(addrobjdict[obj].get('start-ip'))))
+                        IPRange.append(ipaddress.IPv4Address(str(addrobjdict[obj].get('end-ip'))))
+                        if in_Range(matchingipnetaddress, IPRange):
+                            Targetpolicydict[key] = pol
+                            matched += 1
+                            break
+                    elif 'fqdn' == addrobjdict[obj].get('type'):
                         break
-                elif 'fqdn' == addrobjdict[obj].get('type'):
-                    break
-                elif 'wildcard' == addrobjdict[obj].get('type'):
-                    break
-                elif addrobjdict[obj] != {}:
-                    # pp_json(addrobjdict[obj])
-                    IPSubnet = str(addrobjdict[obj].get('subnet')).replace(' ', '/')
-                    policyaddr = ipaddress.IPv4Network(IPSubnet)
-                    if in_supersubnet(matchingipnetaddress, policyaddr):
-                        Targetpolicydict[key] = pol
-                        matched += 1
+                    elif 'wildcard' == addrobjdict[obj].get('type'):
                         break
-                    elif matchingipnetaddress == policyaddr:
-                        # sys.stdout.write('Exact Match %s in Policy $s' % str(matchingipnetaddress) , key)
-                        Targetpolicydict[key] = pol
-                        matched += 1
-                        break
-            except:
-                raise
+                    elif addrobjdict[obj] != {} and ('subnet' in addrobjdict[obj].keys()):
+                        # pp_json(addrobjdict[obj])
+                        IPSubnet = str(addrobjdict[obj].get('subnet')).replace(' ', '/')
+                        policyaddr = ipaddress.IPv4Network(IPSubnet)
+                        if in_supersubnet(matchingipnetaddress, policyaddr):
+                            Targetpolicydict[key] = pol
+                            matched += 1
+                            break
+                        elif matchingipnetaddress == policyaddr:
+                            # sys.stdout.write('Exact Match %s in Policy $s' % str(matchingipnetaddress) , key)
+                            Targetpolicydict[key] = pol
+                            matched += 1
+                            break
+                except:
+                    raise
     return Targetpolicydict
 
 
@@ -77,14 +78,22 @@ def in_Range(IP,IPRange):
 def expandips(Addr):
     OrigAddr = str(Addr)
     SplitedIPs = list()
-    SplitedIPs += list(OrigAddr.split(' '))
+    SplitedIPs += list(OrigAddr.split('" "'))
     for i,e_entry in enumerate(SplitedIPs):
+        if e_entry[0] != '"':
+            e_entry = '"' + e_entry
+        if e_entry[-1] != '"':
+            e_entry = e_entry + '"'
         if e_entry in addrgrpobjdict:
             SplitedIPs += addrgrpobjdict[e_entry]['member']
         else:
-            SplitedIPs[i] = e_entry.replace('"','')
+            SplitedIPs[i] = e_entry
     Final_Splitted_IPs = list()
     for i, e_entry in enumerate(SplitedIPs):
+        if e_entry[0] != '"':
+            e_entry = '"' + e_entry
+        if e_entry[-1] != '"':
+            e_entry = e_entry + '"'
         if e_entry not in addrgrpobjdict:
             Final_Splitted_IPs.append(e_entry)
     return Final_Splitted_IPs
@@ -145,11 +154,11 @@ if __name__ == '__main__':
     for line in alladdress:
         try:
             if line.strip().startswith('edit'):
-                addrobjid = (re.match(r'edit (".*")', line.strip()).groups()[0]).replace('"','')
+                addrobjid = (re.match(r'edit (".*")', line.strip()).groups()[0])
                 addrobjdict[addrobjid] = dict()
             elif line.strip() != 'next' and line.strip().startswith('set'):
                 key, val = re.match(r'^set (\S*) (.+)$', line.strip()).groups()
-                addrobjdict[addrobjid][key] = val.replace('"','')
+                addrobjdict[addrobjid][key] = val.replace('" "','')
         except:
             print(("Error on line: %s" % line))
             raise
@@ -160,11 +169,14 @@ if __name__ == '__main__':
     for line in alladdressgroups:
         try:
             if line.strip().startswith('edit'):
-                addrgrpobjid = (re.match(r'edit (".*")', line.strip()).groups()[0]).replace('"','')
+                addrgrpobjid = (re.match(r'edit (\".*\")', line.strip()).groups()[0])
+                if "home" in addrgrpobjid:
+                    print(addrgrpobjid)
+                    input()
                 addrgrpobjdict[addrgrpobjid] = dict()
             elif line.strip() != 'next' and line.strip().startswith('set'):
                 key, val = re.match(r'^set (\S*) (.+)$', line.strip()).groups()
-                addrgrpobjdict[addrgrpobjid][key] = val.split(''" "'')
+                addrgrpobjdict[addrgrpobjid][key] = val.split('" "')
                 for i, item in enumerate(addrgrpobjdict[addrgrpobjid][key]):
                     addrgrpobjdict[addrgrpobjid][key][i] = (addrgrpobjdict[addrgrpobjid][key][i]).replace('"','')
         except:
@@ -183,7 +195,7 @@ if __name__ == '__main__':
                 serviceportsdict[serviceportid] = dict()
             elif line.strip() != 'next' and line.strip().startswith('set'):
                 key, val = re.match(r'^set (\S*) (.+)$', line.strip()).groups()
-                serviceportsdict[serviceportid][key] = val.replace('"','')
+                serviceportsdict[serviceportid][key] = val
         except:
             print(("Error on line: %s" % line))
             raise
@@ -198,7 +210,7 @@ if __name__ == '__main__':
                 fwpolicydict[fwpolicyid] = dict()
             elif line.strip() != 'next' and line.strip().startswith('set'):
                 key, val = re.match(r'^set (\S*) (.+)$', line.strip()).groups()
-                fwpolicydict[fwpolicyid][key] = val.replace('"','')
+                fwpolicydict[fwpolicyid][key] = val
         except:
             print(("Error on line: %s" % line))
             raise
