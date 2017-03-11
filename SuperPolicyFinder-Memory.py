@@ -80,20 +80,14 @@ def expandips(Addr):
     SplitedIPs = list()
     SplitedIPs += list(OrigAddr.split('" "'))
     for i,e_entry in enumerate(SplitedIPs):
-        if e_entry[0] != '"':
-            e_entry = '"' + e_entry
-        if e_entry[-1] != '"':
-            e_entry = e_entry + '"'
+        e_entry = e_entry.replace('"','')
         if e_entry in addrgrpobjdict:
             SplitedIPs += addrgrpobjdict[e_entry]['member']
         else:
             SplitedIPs[i] = e_entry
     Final_Splitted_IPs = list()
     for i, e_entry in enumerate(SplitedIPs):
-        if e_entry[0] != '"':
-            e_entry = '"' + e_entry
-        if e_entry[-1] != '"':
-            e_entry = e_entry + '"'
+        e_entry = e_entry.replace('"','')
         if e_entry not in addrgrpobjdict:
             Final_Splitted_IPs.append(e_entry)
     return Final_Splitted_IPs
@@ -154,7 +148,7 @@ if __name__ == '__main__':
     for line in alladdress:
         try:
             if line.strip().startswith('edit'):
-                addrobjid = (re.match(r'edit (".*")', line.strip()).groups()[0])
+                addrobjid = (re.match(r'edit \"(.*)"', line.strip()).groups()[0])
                 addrobjdict[addrobjid] = dict()
             elif line.strip() != 'next' and line.strip().startswith('set'):
                 key, val = re.match(r'^set (\S*) (.+)$', line.strip()).groups()
@@ -169,7 +163,7 @@ if __name__ == '__main__':
     for line in alladdressgroups:
         try:
             if line.strip().startswith('edit'):
-                addrgrpobjid = (re.match(r'edit (\".*\")', line.strip()).groups()[0])
+                addrgrpobjid = (re.match(r'edit \"(.*)\"', line.strip()).groups()[0])
                 if "home" in addrgrpobjid:
                     print(addrgrpobjid)
                     input()
