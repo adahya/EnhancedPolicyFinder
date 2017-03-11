@@ -21,7 +21,7 @@ def FindMatchingPolicies(option=None):
         # pp_json(pol)
         for obj in pol[option]:
             if (obj not in addrobjdict.keys()) or (addrobjdict[obj] == None):
-                print('Error No Match in Address Object: %s' % obj)
+                print('\nError No Match in Address Object: %s' % obj)
             else:
                 try:
                     if 'iprange' == addrobjdict[obj].get('type'):
@@ -164,9 +164,6 @@ if __name__ == '__main__':
         try:
             if line.strip().startswith('edit'):
                 addrgrpobjid = (re.match(r'edit \"(.*)\"', line.strip()).groups()[0])
-                if "home" in addrgrpobjid:
-                    print(addrgrpobjid)
-                    input()
                 addrgrpobjdict[addrgrpobjid] = dict()
             elif line.strip() != 'next' and line.strip().startswith('set'):
                 key, val = re.match(r'^set (\S*) (.+)$', line.strip()).groups()
